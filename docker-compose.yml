@@ -1,0 +1,113 @@
+version: "3.9"
+
+# Redis Sentinel topology
+# - 1 master (redis:7.4)
+# - 1 replica (redis:7.4)
+# - 3 sentinels (redis:7.4)
+# Notes:
+# - All published ports are bound to 127.0.0.1 (local-only access).
+# - Master is aliased as 'redis-local' inside the Docker network so Sentinels/replica can resolve it internally,
+#   while the host resolves 'redis-local' to 127.0.0.1 via hosts file.
+
+services:
+  redis-master:
+    image: redis:7.4
+    container_name: redis-master
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    command: ["sh", "-c", "sed -i 's|__REDIS_PASSWORD__|'\"$${REDIS_PASSWORD}\"'|g' /usr/local/etc/redis/redis.conf && exec redis-server /usr/local/etc/redis/redis.conf" ]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - ./redis-master/conf/redis.conf:/usr/local/etc/redis/redis.conf:rw
+      - ./redis-master/data:/data
+    networks:
+      redisnet:
+        aliases:
+          - redis-local
+    healthcheck:
+      test: ["CMD", "sh", "-c", "redis-cli -a \"$${REDIS_PASSWORD}\" PING"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis-replica:
+    image: redis:7.4
+    container_name: redis-replica
+    depends_on:
+      redis-master:
+        condition: service_healthy
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    command: ["sh", "-c", "sed -i 's|__REDIS_PASSWORD__|'\"$${REDIS_PASSWORD}\"'|g' /usr/local/etc/redis/redis.conf && exec redis-server /usr/local/etc/redis/redis.conf" ]
+    ports:
+      - "127.0.0.1:6380:6379"  # expose replica on 6380 externally
+    volumes:
+      - ./redis-replica/conf/redis.conf:/usr/local/etc/redis/redis.conf:rw
+      - ./redis-replica/data:/data
+    networks:
+      - redisnet
+    healthcheck:
+      test: ["CMD", "sh", "-c", "redis-cli -p 6379 -a \"$${REDIS_PASSWORD}\" PING"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  sentinel1:
+    image: redis:7.4
+    container_name: redis-sentinel-1
+    depends_on:
+      redis-master:
+        condition: service_healthy
+      redis-replica:
+        condition: service_started
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    command: ["sh", "-c", "sed -i 's|__REDIS_PASSWORD__|'\"$${REDIS_PASSWORD}\"'|g' /data/sentinel.conf && exec redis-server /data/sentinel.conf --sentinel" ]
+    ports:
+      - "127.0.0.1:26379:26379"
+    volumes:
+      - ./sentinel1/conf:/data
+    networks:
+      - redisnet
+
+  sentinel2:
+    image: redis:7.4
+    container_name: redis-sentinel-2
+    depends_on:
+      redis-master:
+        condition: service_healthy
+      redis-replica:
+        condition: service_started
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    command: ["sh", "-c", "sed -i 's|__REDIS_PASSWORD__|'\"$${REDIS_PASSWORD}\"'|g' /data/sentinel.conf && exec redis-server /data/sentinel.conf --sentinel" ]
+    ports:
+      - "127.0.0.1:26380:26379"
+    volumes:
+      - ./sentinel2/conf:/data
+    networks:
+      - redisnet
+
+  sentinel3:
+    image: redis:7.4
+    container_name: redis-sentinel-3
+    depends_on:
+      redis-master:
+        condition: service_healthy
+      redis-replica:
+        condition: service_started
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+    command: ["sh", "-c", "sed -i 's|__REDIS_PASSWORD__|'\"$${REDIS_PASSWORD}\"'|g' /data/sentinel.conf && exec redis-server /data/sentinel.conf --sentinel" ]
+    ports:
+      - "127.0.0.1:26381:26379"
+    volumes:
+      - ./sentinel3/conf:/data
+    networks:
+      - redisnet
+
+networks:
+  redisnet:
+    name: redisnet
+    driver: bridge

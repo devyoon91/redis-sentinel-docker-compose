@@ -1,0 +1,32 @@
+# Redis 데이터 디렉토리
+redis-master/data/
+redis-replica/data/
+
+# 로그 파일
+*.log
+*.rdb
+*.aof
+
+# Docker 볼륨 데이터
+**/data/
+
+# OS 관련
+.DS_Store
+Thumbs.db
+
+# IDE 관련
+.idea/
+.vscode/
+*.iml
+*.swp
+*.swo
+*~
+
+# 임시 파일
+*.tmp
+*.temp
+
+# 환경 변수 파일 (비밀값)
+.env
+.env.local
+.env.*.local
